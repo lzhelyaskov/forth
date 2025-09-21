@@ -1,0 +1,8 @@
+[package]
+name = "forth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+forthvm = {path = "../forthvm"}
+getopts = "0.2"
