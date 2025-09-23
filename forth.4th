@@ -1,4 +1,3 @@
-\ Define some character constants
 : '\n' 10 ;
 : bl   32 ; \ bl (BLank) is a standard FORTH word for space.
 
@@ -30,7 +29,7 @@
 ;
 
 \ recurse makes a recursive call to the current word that is being compiled.
-: recurse
+: recurse immediate
     latest @ >cfa ,
 ;
 
@@ -58,9 +57,7 @@
     ' not , [compile] if
 ;
 
-
 \ loops
-
 \ begin loop-body condition until ( do { loop-body } while (condition); )
 
 : begin immediate
@@ -107,7 +104,7 @@
 
 : spaces ( n -- ) \ prints n spaces
     begin
-        dup \ 0>
+        dup 0>
     while
         space
         1-
@@ -115,9 +112,7 @@
     drop
 ;
 
-: nip ( a b -- b ) swap drop ;
-
-\ we do not have 'over' yet
+\: nip ( a b -- b ) swap drop ;
 \: tuck ( a b -- b a b ) swap over ;
 : pick ( xn..x0 n -- xn..x0 xn )
     1+      \ skip n on the stack
@@ -128,6 +123,11 @@
 
 : decimal ( -- ) 10 base ! ;
 : hex ( -- ) 16 base ! ;
+
+: depth ( -- n ) 
+    s0 dsp@ -
+    4-
+;
 
 : U. ( u -- ) \ print unsigned number
     base @ /mod
@@ -143,4 +143,172 @@
     then
     +
     emit
+;
+
+\ print stack contents
+: .s ( -- )
+    dsp@
+    begin
+        dup s0 <
+    while
+        4+
+        dup @ U.
+        space
+    repeat
+    drop
+;
+
+\ width in characters of an unsigned integer
+: uwidth ( u -- width )
+    base @ /
+    ?dup if
+        recurse 1+
+    else
+        1
+    then
+;
+
+\ prints an unsigned number, padded to a certain width
+: U.R ( u width -- )
+    swap dup uwidth rot swap - spaces U.
+;
+
+\ prints a signed number, padded to a certain width.
+: .R ( n width -- )
+    swap
+    dup 0< if
+        negate
+        1
+        swap
+        rot
+        1-
+    else
+        0 swap rot
+    then
+    swap
+    dup
+    uwidth
+    rot
+    swap -
+    spaces
+    swap
+
+    if
+        '-' emit
+    then
+    U.
+;
+
+\ prints an integer followed by space
+: . ( n -- ) 0 .R space ;
+
+\ fetch and print an integer
+: ? ( addr -- ) @ . ;
+
+\ c a b within returns 1 (true) if a <= c and c < b
+: within ( c a b -- f )
+    over - >r - r> u<
+;
+
+\ takes address and aligns it to the next 4 bytes
+: aligned ( addr -- addr )
+    3 + 3 invert and \ ( (addr + 3) & ~3)
+;
+
+\ aligns the HERE pointer
+: align ( -- )
+    here @ aligned here !
+;
+
+\ 
+: cells ( n -- n ) 4 * ;
+
+\ allot allocates n bytes of memory
+: allot ( n -- addr )
+    here @ swap
+    here +!
+;
+
+\ c, appends (compiles) a byte to the current compiled word.
+: c,
+	here @ c!	( store the character in the compiled image )
+	1 here +!	( increment HERE pointer by 1 byte )
+;
+
+\ s" string" is used in FORTH to define strings.
+: s" immediate ( -- addr len )
+    state @ if ( compiling? )
+        ' litstring ,
+        here @
+        0 ,
+        begin 
+            key
+            dup '"' <>
+        while
+            c,
+        repeat
+        drop
+        dup
+        here @ swap -
+        4-
+        swap !
+        align
+    else
+        here @
+        begin
+            key
+            dup '"' <>
+        while
+            over c!
+            1+
+        repeat
+        drop
+        here @ -
+        here @
+        swap
+    then
+;
+
+\ ." is the print string operator in FORTH.  Example: ." Something to print"
+: ." immediate ( -- )
+    state @ if ( compiling? )
+        [compile] s"
+        ' tell ,
+    else
+        begin
+            key
+            dup '"' = if
+                drop
+                exit
+            then
+            emit
+        again
+    then
+;
+
+\ defines a constant
+: const ( n -- )
+    word
+    create
+    DOCOL ,
+    ' lit ,
+    ,
+    ' exit ,
+;
+
+\ defines a variable
+: var 
+    1 cells allot
+    word create
+    DOCOL ,
+    ' lit ,
+    ,
+    ' exit ,
+;
+
+\ forget xxx removes xxx word and all words defined after it from dictionary
+: forget
+	word find
+	dup @ latest !
+	here !
 ;
