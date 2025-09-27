@@ -312,3 +312,238 @@
 	dup @ latest !
 	here !
 ;
+
+\ print words name e.g. latest @ id.
+: id. ( addr -- )
+    4+
+    dup c@ ( flags and length byte )
+    F_LENMASK and
+
+    begin
+        dup 0> ( length > 0 ? )
+    while
+        swap 1+
+        dup c@
+        emit
+        swap 1-
+    repeat
+    2drop
+;
+
+\ returns true if word is flagged as hidden
+: ?hidden ( addr -- f )
+    4+
+    c@
+    F_HIDDEN and
+;
+
+\ returns true if word is flagged as immediate
+: ?immediate ( addr -- f )
+    4+
+    c@
+    F_IMMED and
+;
+
+\ prints all words defined in the dictionary
+\ does not print hidden words
+: words ( -- )
+    latest @
+    begin
+        ?dup
+    while
+        dup ?hidden not if
+            dup id.
+            cr \ space
+        then
+        @
+    repeat
+;
+
+\ dump memory content
+\ e.g latest @ 128 dumps
+: dump ( addr len -- )
+    base @ -rot \ save current base
+    hex
+
+    begin
+        ?dup
+    while
+        over 8 U.R space
+
+        2dup
+        1- 15 and 1+
+        begin
+            ?dup
+        while
+            swap
+            dup c@
+            2 .R space
+            1+ swap 1-
+        repeat
+        drop
+
+        2dup 1- 15 and 1+
+        begin
+            ?dup
+        while
+            swap
+            dup c@
+            dup 32 128 within if
+                emit
+            else
+                drop '.' emit
+            then
+            1+ swap 1-
+        repeat
+        drop
+        cr
+
+        dup 1- 15 and 1+
+        tuck
+        -
+        >r + r>
+    repeat
+    drop
+
+    base ! \ restore saved base
+;
+
+\ ( case ... endcase is forths switch statement
+
+\     ( some value on the stack )
+\ 		CASE
+\             test1 OF ... ENDOF
+\             test2 OF ... ENDOF
+\             testn OF ... ENDOF
+\             ... ( default case )
+\ 		ENDCASE
+
+\ compiles to:
+
+\ 	CASE				(push 0 on the immediate-mode parameter stack)
+\ 	test1 OF ... ENDOF		test1 OVER = IF DROP ... ELSE
+\ 	test2 OF ... ENDOF		test2 OVER = IF DROP ... ELSE
+\ 	testn OF ... ENDOF		testn OVER = IF DROP ... ELSE
+\ 	... ( default case )		...
+\ 	ENDCASE				DROP THEN [THEN [THEN ...]]
+\ )
+
+: case immediate 0 ; \ marks bottom of the stack
+: of immediate
+    ' over ,
+    ' = ,
+    [compile] if
+    ' drop ,
+;
+: endof immediate
+    [compile] else 
+;
+: endcase immediate
+    ' drop ,
+    begin 
+        ?dup
+    while 
+        [compile] then
+    repeat
+;
+
+: test_case
+    case
+        1 of ." one" endof
+        2 of ." two" endof
+        ." something else"
+    endcase
+;
+
+\ opposite of >cfa
+\ transforms code field address into word address
+\ returns 0 if nothing found
+: cfa> ( addr -- addr | 0)
+    latest @
+    begin
+        ?dup
+    while
+        2dup swap
+        < if
+            nip
+            exit
+        then
+        @
+    repeat
+    drop
+    0
+;
+
+\ decompiles a forth word
+: see ( -- )
+    word find
+    here @
+    latest @
+    .s
+    begin
+        2 pick
+        over
+        <>
+    while
+        nip
+        dup @
+    repeat
+    ." after repeat " .s cr
+    drop swap
+    ':' emit space dup id. space \ : NAME [IMMEDIATE]
+    dup ?immediate if 
+        ." immediate " 
+    then
+    .s
+    >dfa
+    begin
+        2dup >
+    while
+        dup @
+        case
+            \ is it lit ?
+            ' lit of
+                4+ dup @ .
+            endof
+            \ is it litstring ?
+            ' litstring of
+                [ char s ] literal emit '"' emit space \ print s"<space>
+                4+ dup @
+                swap 4+ swap
+                2dup tell
+                '"' emit space
+                + aligned
+                4-
+            endof
+            \ is it 0branch ?
+            ' 0branch of
+                ." 0branch ( "
+                4+ dup @ .
+                ." ) "
+            endof
+            \ is it branch ?
+            ' branch of
+                ." branch ( "
+                4+ dup @ .
+                ." ) "
+            endof
+            \ is it ' (tick) ?
+            ' ' of
+                [ char ' ] literal emit space
+                4+ dup @
+                cfa> id. space
+            endof
+            \ is it exit ?
+            ' exit of
+                2dup 4+ <> if
+                    ." exit "
+                then
+            endof
+            \ default:
+            dup cfa> id. space
+        endcase
+        4+
+    repeat
+    ';' emit cr
+    2drop
+;
