@@ -25,12 +25,16 @@ fn main() {
     }
 
     if let Some(filename) = matches.opt_str("i") {
-        if let Ok(file) = File::open(&filename) {
-            in_stream_from_file(file);
-        } else {
-            println!("could not open {filename}.");
-            print_usage(&program, opts);
-            return;
+
+        match File::open(&filename) {
+            Ok(file) => {
+                in_stream_from_file(file);
+            },
+            Err(err) => {
+                println!("could not open {filename}. {:?}", err);
+                print_usage(&program, opts);
+                return;
+            },
         }
     }
 

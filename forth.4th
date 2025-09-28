@@ -102,7 +102,8 @@
     drop                \ drop depth counter
 ;
 
-: spaces ( n -- ) \ prints n spaces
+\ prints n spaces
+: spaces ( n -- )
     begin
         dup 0>
     while
@@ -114,8 +115,10 @@
 
 \: nip ( a b -- b ) swap drop ;
 \: tuck ( a b -- b a b ) swap over ;
+
 : pick ( xn..x0 n -- xn..x0 xn )
     1+      \ skip n on the stack
+    1+
     4 *     \ multiply by cell size
     dsp@ +  \ add to stack pointer
     @       \ fetch
@@ -129,7 +132,8 @@
     4-
 ;
 
-: U. ( u -- ) \ print unsigned number
+\ print unsigned integer
+: U. ( u -- )
     base @ /mod
     ?dup if
         recurse
@@ -446,7 +450,7 @@
         [compile] then
     repeat
 ;
-
+(
 : test_case
     case
         1 of ." one" endof
@@ -454,7 +458,7 @@
         ." something else"
     endcase
 ;
-
+)
 \ opposite of >cfa
 \ transforms code field address into word address
 \ returns 0 if nothing found
@@ -474,12 +478,15 @@
     0
 ;
 
-\ decompiles a forth word
+\ see xxx
+\ decompiles a forth word xxx
 : see ( -- )
     word find
     here @
     latest @
-    .s
+    \ ." before repeat " .s cr
+    \ find the word right after xxx
+    \ this way we know where xxx ends
     begin
         2 pick
         over
@@ -488,13 +495,16 @@
         nip
         dup @
     repeat
-    ." after repeat " .s cr
+    \ ." after repeat " .s cr
+
     drop swap
     ':' emit space dup id. space \ : NAME [IMMEDIATE]
     dup ?immediate if 
         ." immediate " 
     then
-    .s
+
+    \ ." after name " .s cr
+
     >dfa
     begin
         2dup >
@@ -546,4 +556,104 @@
     repeat
     ';' emit cr
     2drop
+;
+
+\ create a word with no name
+: :noname
+    0 0 create
+    here @
+    DOCOL ,
+    ]
+;
+
+: ['] immediate
+    ' lit ,
+;
+
+\ exceptions
+
+: exception-marker
+    rdrop
+    0
+;
+
+: catch ( xt -- exn? )
+    dsp@ 4+ >r \ save parameter stack pointer
+    ' exception-marker 4+
+    >r
+    execute
+;
+
+: throw ( n -- )
+    ?dup if
+        rsp@
+        begin
+            dup r0 4- <
+        while
+            dup @
+            ' exception-marker 4+ = if
+                4+
+                rsp!
+                dup dup dup
+                r>
+                4-
+                swap over
+                !
+                dsp! exit
+            then
+            4+
+        repeat
+
+        drop
+
+        case
+            0 1- of
+                ." aborted" cr
+            endof
+            ." uncaught throw "
+            dup . cr
+        endcase
+        quit
+    then
+;
+
+\ interrupts execution, drops both stacks
+: abort ( -- )
+    0 1- throw
+;
+
+: abort" ( f -- )
+    if 
+        
+
+    then
+;
+
+\ prints a stack trace by walking up return stack
+: stack-trace
+    rsp@
+    begin
+        dup r0 4- <
+    while
+        dup @
+        case
+            ' exception-marker 4+ of
+                ." catch ( dsp="
+                4+ dup @ U.
+                ." ) "
+            endof
+
+            dup
+            cfa>
+            ?dup if
+                2dup
+                id.
+                [ char + ] literal emit
+                swap >dfa 4+ - .
+            then
+        endcase
+        4+
+    repeat
+    drop
+    cr
 ;

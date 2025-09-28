@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-forthvm = {path = "../forthvm"}
+forthvm = {path = "../forthvm", features = ["fileio"]}
 getopts = "0.2"
