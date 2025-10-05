@@ -657,3 +657,71 @@
     drop
     cr
 ;
+
+: is-whitespace ( c -- f )
+    33 < \ c < ' ' 
+;
+
+: is-not-whitespace
+    is-whitespace 0=
+;
+
+\ : skip-whitespace ( addr n -- addr n )
+
+\     begin
+\         2dup ( addr n addr n )
+\         0>
+\         swap ( addr n n addr )
+\         c@ is-whitespace and ( addr n f ) 
+\     while
+\         1- \ decrement n
+\         swap 1+ \ increment addr
+\         swap
+\     repeat
+\ ;
+
+: xt-skip ( addr n xt -- addr n )
+    >r \ save xt in return stack
+    begin
+        2dup ( addr n addr n )
+        0>
+        swap ( addr n n addr )
+        c@ r@ execute and ( addr n f ) 
+    while
+        1- \ decrement n
+        swap 1+ \ increment addr
+        swap
+    repeat
+    r> drop \ drop xt
+;
+
+: skip-whitespace ( addr n -- addr n )
+    ['] is-whitespace xt-skip
+;
+
+: chars ( n -- n )
+;
+
+: /string ( addr len n -- addr len2 )
+    dup >r
+    - ( addr len2 )
+    swap ( len2 addr )
+    r> + swap
+;
+
+: source ( -- c-addr u )
+    in-buf @ 1+
+    in-buf c@
+;
+
+: parse-name ( "name" -- addr n )
+    source  ( addr n )
+    >in @   ( addr n i )
+    /string ( addr n)
+    ['] is-whitespace xt-skip over  >r  ( addr n :r addr )
+    ['] is-not-whitespace xt-skip       ( end-addr restlen : r start-addr )
+    2dup    ( end-addr restlen end-addr restlen :r start-addr )
+    1 min + 
+    source drop >in !
+    drop r> tuck -
+;
